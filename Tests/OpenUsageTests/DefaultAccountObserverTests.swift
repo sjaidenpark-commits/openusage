@@ -176,12 +176,8 @@ final class DefaultAccountObserverTests: XCTestCase {
         XCTAssertEqual(makeObserver().observeCodex(), .absent)
     }
 
-    func testCodexKeychainCredentialMakesTheFamilyUnresolved() {
-        // The provider can fall back to the keychain credential when file auth fails, so while a
-        // keychain item exists, the auth file's identity is not provably the producing account —
-        // and we never read the keychain secret on the launch path to find out.
+    func testCodexKeychainOnlyCredentialMakesTheFamilyUnresolved() {
         let observer = makeObserver(
-            files: ["/Users/dev/.codex/auth.json": codexAuthJSON()],
             keychainValue: #"{"tokens": {"access_token": "kc-at"}}"#
         )
 
@@ -191,12 +187,26 @@ final class DefaultAccountObserverTests: XCTestCase {
         )
     }
 
+    func testCodexFileIdentityWinsWhenAStaleKeychainItemExists() {
+        // The account assembly pins a resolved file-backed card to this exact home, so the runtime
+        // cannot fall back to the unrelated keychain item.
+        let observer = makeObserver(
+            files: ["/Users/dev/.codex/auth.json": codexAuthJSON()],
+            keychainValue: #"{"tokens": {"access_token": "kc-at"}}"#
+        )
+
+        XCTAssertEqual(
+            observer.observeCodex(),
+            .resolved(identityKey: "codex-acct-1", label: nil, anchor: "/Users/dev/.codex")
+        )
+    }
+
     func testCodexUnverifiableKeychainProbeAlsoMakesTheFamilyUnresolved() {
         // A timed-out/failed probe (`nil`) must land on the same side as "item present": resolving
         // from the file while a keychain fallback might exist is the wrong-account stamp risk.
         let observer = DefaultAccountObserver(
             environment: FakeEnvironment([:]),
-            files: FakeFiles(["/Users/dev/.codex/auth.json": codexAuthJSON()]),
+            files: FakeFiles([:]),
             keychain: ThrowingKeychain(),
             homeDirectory: { [home] in home }
         )

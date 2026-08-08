@@ -16,6 +16,8 @@ struct SettingsScreen: View {
 
     @State private var launchAtLogin = LaunchAtLoginSetting()
     @State private var commandLineTool = CommandLineToolInstaller()
+    @State private var managedAccounts = ManagedAccountSlots()
+    @State private var pendingAccountDeletion: ManagedAccountSlot?
     @AppStorage(TotalSpendSetting.key) private var showTotalSpend = true
     @AppStorage(AppearanceSetting.key) private var appearance = AppearanceSetting.system
     @AppStorage(TimeFormatSetting.key) private var timeFormat = TimeFormatSetting.auto
@@ -141,6 +143,7 @@ struct SettingsScreen: View {
                         .hoverTooltip("Show how you're pacing on every metric, not just ones near their limit")
                 }
             }
+            accountsSection
             notificationsSection
             section("Privacy") {
                 row("Hide From Screen Share") {
@@ -208,9 +211,71 @@ struct SettingsScreen: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .task { await refreshNotificationsAuth() }
+        .alert(item: $pendingAccountDeletion) { slot in
+            Alert(
+                title: Text("Remove \(slot.title)?"),
+                message: Text("Its isolated login folder moves to Trash. Your default \(slot.provider.displayName) account is untouched."),
+                primaryButton: .destructive(Text("Remove")) { managedAccounts.remove(slot) },
+                secondaryButton: .cancel()
+            )
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             commandLineTool.refreshStatus()
+            managedAccounts.refresh()
             Task { await refreshNotificationsAuth() }
+        }
+    }
+
+    // MARK: - Accounts
+
+    private var accountsSection: some View {
+        section("Accounts") {
+            accountProviderRow(.claude)
+            Divider()
+            accountProviderRow(.codex)
+            ForEach(managedAccounts.slots) { slot in
+                Divider()
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(slot.provider.displayName) — \(slot.title)")
+                            .lineLimit(1)
+                        Text(slot.isReady ? "Signed in" : "Login required")
+                            .font(.caption)
+                            .foregroundStyle(slot.isReady ? AnyShapeStyle(Color.secondary) : Theme.notice)
+                    }
+                    Spacer(minLength: 4)
+                    Button(slot.isReady ? "Re-login" : "Sign In") {
+                        managedAccounts.signIn(slot)
+                    }
+                    .controlSize(.small)
+                    Button {
+                        pendingAccountDeletion = slot
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Remove \(slot.title)")
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, density.controlRowPadding)
+            }
+            Text("Default CLI logins stay untouched. Extra accounts use isolated folders and appear after login completes.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if let notice = managedAccounts.notice {
+                inlineNotice(notice)
+            }
+        }
+    }
+
+    private func accountProviderRow(_ provider: ManagedAccountProvider) -> some View {
+        row(provider.displayName) {
+            Button("Add Account…") { managedAccounts.add(provider) }
+                .controlSize(.small)
         }
     }
 

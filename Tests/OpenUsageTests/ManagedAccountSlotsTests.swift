@@ -10,5 +10,13 @@ final class ManagedAccountSlotsTests: XCTestCase {
             ),
             3
         )
+        XCTAssertEqual(
+            ManagedAccountSlots.nextSlotNumber(
+                existingNames: [".codex-account-2", ".codex-account-3", ".codex-account-4"],
+                prefix: ".codex-account-"
+            ),
+            5,
+            "account creation keeps extending past the prepared second slot"
+        )
     }
 }

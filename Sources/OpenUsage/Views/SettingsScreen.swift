@@ -260,7 +260,7 @@ struct SettingsScreen: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, density.controlRowPadding)
             }
-            Text("Default CLI logins stay untouched. Extra accounts use isolated folders and appear after login completes.")
+            Text("Default logins stay untouched. Drag account headers on the Dashboard to reorder them.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 12)
@@ -273,10 +273,21 @@ struct SettingsScreen: View {
     }
 
     private func accountProviderRow(_ provider: ManagedAccountProvider) -> some View {
-        row(provider.displayName) {
+        let record = container.accounts.defaultBadgeHolder(family: provider.rawValue)
+        return HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(provider.displayName)
+                Text(record?.label?.nilIfEmpty ?? "Default account not identified")
+                    .font(.caption)
+                    .foregroundStyle(record?.label?.nilIfEmpty == nil ? Theme.notice : AnyShapeStyle(Color.secondary))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
             Button("Add Account…") { managedAccounts.add(provider) }
                 .controlSize(.small)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, density.controlRowPadding)
     }
 
     // MARK: - Notifications

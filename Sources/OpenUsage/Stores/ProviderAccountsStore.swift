@@ -80,21 +80,12 @@ struct ProviderAccountRecord: Codable, Equatable, Sendable {
     /// Set by a future "Remove Account…". A tombstoned account is never resurrected by rescans.
     var removedTombstone: Bool = false
 
-    /// The name a card carries without a rename: the stock family name for the bare card, a
-    /// "Claude — <org or email>" derived from the account label for an extra card, or the record id
-    /// itself when the account has no label (owner decision 2: short-hash fallback, one rename away
-    /// from good). Never contains `customLabel` — this is what gets baked into the launch
-    /// `Provider`, and baking a rename there is how stale-name bugs are born.
+    /// The name a card carries without a rename. Every identified Claude/Codex card — including the
+    /// default-home card — includes its provider-issued account label so two subscriptions are
+    /// distinguishable at a glance. Never contains `customLabel`.
     var derivedDisplayName: String {
-        guard ProviderAccountID.isAccountCard(id) else { return family.capitalized }
-        guard let label = label?.nilIfEmpty else { return id }
-        // Labels are our own "email (Org Name)" format — prefer the org for a short card title.
-        if label.hasSuffix(")"), let open = label.lastIndex(of: "(") {
-            let org = label[label.index(after: open)..<label.index(before: label.endIndex)]
-                .trimmingCharacters(in: .whitespaces)
-            if !org.isEmpty { return "\(family.capitalized) — \(org)" }
-        }
-        return "\(family.capitalized) — \(label)"
+        if let label = label?.nilIfEmpty { return "\(family.capitalized) — \(label)" }
+        return ProviderAccountID.isAccountCard(id) ? id : family.capitalized
     }
 
     /// THE name resolver — the single place a rename becomes a card title. Everything that shows a

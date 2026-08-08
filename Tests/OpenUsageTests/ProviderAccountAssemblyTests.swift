@@ -120,7 +120,7 @@ final class ProviderAccountAssemblyTests: XCTestCase {
         let card = try XCTUnwrap(assembly.claudeCards.first)
         XCTAssertEqual(assembly.claudeCards.count, 1)
         XCTAssertTrue(card.id.hasPrefix("claude@"), "a config-dir account never claims the bare id")
-        XCTAssertEqual(card.displayName, "Claude — Sunstory")
+        XCTAssertEqual(card.displayName, "Claude — work@example.com (Sunstory)")
         XCTAssertEqual(card.configDirPath, "/Users/dev/.claude-work")
         XCTAssertEqual(assembly.identityKeysByCard["claude"], "acct-1")
         XCTAssertEqual(assembly.identityKeysByCard[card.id], "acct-2")

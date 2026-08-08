@@ -84,7 +84,18 @@ struct ProviderAccountRecord: Codable, Equatable, Sendable {
     /// default-home card — includes its provider-issued account label so two subscriptions are
     /// distinguishable at a glance. Never contains `customLabel`.
     var derivedDisplayName: String {
-        if let label = label?.nilIfEmpty { return "\(family.capitalized) — \(label)" }
+        if let label = label?.nilIfEmpty {
+            // Claude labels are "email (Organization)". The full label remains visible in Settings;
+            // dashboard headers keep the email so three or more accounts still fit without every
+            // title truncating before the distinguishing part.
+            let compactLabel: String
+            if let separator = label.range(of: " ("), label[..<separator.lowerBound].contains("@") {
+                compactLabel = String(label[..<separator.lowerBound])
+            } else {
+                compactLabel = label
+            }
+            return "\(family.capitalized) — \(compactLabel)"
+        }
         return ProviderAccountID.isAccountCard(id) ? id : family.capitalized
     }
 

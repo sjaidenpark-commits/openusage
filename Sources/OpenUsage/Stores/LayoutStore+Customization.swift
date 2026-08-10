@@ -136,14 +136,43 @@ extension LayoutStore {
             + ordered.filter { expandedMetricIDs.contains($0) }
     }
 
-    /// Pinned metrics grouped by provider, in the user's Customize order (provider order, then each
-    /// provider's metric order). A temporarily disabled provider is excluded from the rendered groups
-    /// but keeps its pins. Drives the menu-bar strip.
+    /// Pinned metrics grouped by provider, in the user's Customize order. Claude/Codex pins act as a
+    /// family template: whichever account card is first in the current provider order supplies the
+    /// values, so dragging another account to the top updates the menu bar without re-pinning rows.
+    /// A temporarily disabled provider is excluded but keeps its pins.
     var pinnedGroups: [ProviderMetrics] {
-        orderedProviders().compactMap { provider in
+        let ordered = orderedProviders()
+        var emittedAccountFamilies = Set<String>()
+        return ordered.compactMap { provider in
             guard isProviderEnabled(provider.id) else { return nil }
-            // Keep the strip order matching Customize: always-shown pins first, then expanded ones.
-            let metrics = orderedSupportedMetrics(for: provider.id).filter { pinnedMetricIDs.contains($0.id) }
+            let family = ProviderAccountID.family(of: provider.id)
+            let metrics: [WidgetDescriptor]
+            if ProviderAccountID.families.contains(family) {
+                guard emittedAccountFamilies.insert(family).inserted else { return nil }
+                let familyProviders = ordered.filter { ProviderAccountID.family(of: $0.id) == family }
+                let templateProviders = familyProviders.filter { $0.id == family }
+                    + familyProviders.filter { $0.id != family }
+                var suffixes: [String] = []
+                for source in templateProviders {
+                    let pinned = orderedSupportedMetrics(for: source.id).filter {
+                        pinnedMetricIDs.contains($0.id)
+                    }
+                    for descriptor in pinned {
+                        let prefix = source.id + "."
+                        guard descriptor.id.hasPrefix(prefix) else { continue }
+                        suffixes.append(String(descriptor.id.dropFirst(prefix.count)))
+                    }
+                    if !suffixes.isEmpty { break }
+                }
+                let wanted = Set(suffixes.prefix(Self.maxPinsPerProvider))
+                metrics = orderedSupportedMetrics(for: provider.id).filter { descriptor in
+                    let prefix = provider.id + "."
+                    return descriptor.id.hasPrefix(prefix)
+                        && wanted.contains(String(descriptor.id.dropFirst(prefix.count)))
+                }
+            } else {
+                metrics = orderedSupportedMetrics(for: provider.id).filter { pinnedMetricIDs.contains($0.id) }
+            }
             return metrics.isEmpty ? nil : ProviderMetrics(
                 provider: provider,
                 alwaysShownMetrics: metrics.filter { !expandedMetricIDs.contains($0.id) },

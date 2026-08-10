@@ -90,6 +90,22 @@ final class CodexAuthStoreTests: XCTestCase {
         XCTAssertEqual(candidates.count, 1)
         XCTAssertEqual(candidates.first?.auth.tokens?.accessToken, "token")
     }
+
+    func testScopedHomeCannotReadAnotherHomeOrTheDefaultKeychain() {
+        let files = FakeFiles([
+            "/tmp/codex-personal/auth.json": #"{"tokens":{"access_token":"personal"}}"#,
+            "/tmp/codex-work/auth.json": #"{"tokens":{"access_token":"work"}}"#,
+        ])
+        let store = CodexAuthStore(
+            environment: FakeEnvironment(["CODEX_HOME": "/tmp/codex-personal"]),
+            files: files,
+            keychain: FakeKeychain(#"{"tokens":{"access_token":"keychain"}}"#),
+            scope: .home(path: "/tmp/codex-work")
+        )
+
+        XCTAssertEqual(store.loadAuthCandidates().map { $0.auth.tokens?.accessToken }, ["work"])
+        XCTAssertNil(store.loadKeychainAuth())
+    }
 }
 
 final class CodexUsageMapperTests: XCTestCase {
@@ -654,6 +670,22 @@ final class CodexUsageMapperTests: XCTestCase {
 
 @MainActor
 final class CodexProviderTests: XCTestCase {
+    func testAccountCardUsesAccountScopedProviderAndMetricIDs() {
+        let provider = CodexProvider(
+            provider: CodexProvider.makeProvider(id: "codex@1234abcd", displayName: "Codex — Work")
+        )
+
+        XCTAssertEqual(provider.provider.id, "codex@1234abcd")
+        XCTAssertEqual(provider.provider.displayName, "Codex — Work")
+        XCTAssertEqual(provider.widgetDescriptors.map(\.id), [
+            "codex@1234abcd.session", "codex@1234abcd.weekly",
+            "codex@1234abcd.spark", "codex@1234abcd.sparkWeekly",
+            "codex@1234abcd.credits", "codex@1234abcd.rateLimitResets",
+            "codex@1234abcd.trend", "codex@1234abcd.today",
+            "codex@1234abcd.yesterday", "codex@1234abcd.last30",
+        ])
+    }
+
     func testNoUsageDataBadgeIsDroppedWhenLocalLogsHaveSpend() async throws {
         let now = OpenUsageISO8601.date(from: "2026-02-20T16:00:00.000Z")!
         // The live usage API returns nothing mappable (empty body -> no metric lines)...

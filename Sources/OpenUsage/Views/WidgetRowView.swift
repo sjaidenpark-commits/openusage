@@ -19,6 +19,9 @@ struct WidgetRowView: View {
     /// Flips the global Used/Left meter style — the headline's counterpart to the reset toggle.
     /// Same supply rules as `onToggleResetDisplay`.
     var onToggleMeterStyle: (() -> Void)?
+    /// Reset claims are currently routed only for the default Codex card. Extra account cards keep
+    /// their reset-credit timeline read-only until account-scoped claim routing lands.
+    var allowsResetClaim = false
     /// True when this text-only row sits directly under another text-only row. Rows don't know
     /// their neighbors — the list supplies it — and both densities use it to pull consecutive
     /// one-liners into a single cluster (Compact a step harder).
@@ -376,11 +379,11 @@ struct WidgetRowView: View {
                         // Rows with reset expiries are Codex-only today, so the Codex claim service is
                         // the right backing; absent from the environment (previews, share renders) the
                         // timeline is read-only.
-                        claim: codexResetClaim.map { service in
+                        claim: allowsResetClaim ? codexResetClaim.map { service in
                             { expiry, redeemRequestID in
                                 await service.claim(creditExpiringAt: expiry, redeemRequestID: redeemRequestID)
                             }
-                        }
+                        } : nil
                     )
                 }
             }

@@ -131,7 +131,11 @@ final class ProviderAccountsStoreTests: XCTestCase {
 
         store.rename(cardID: "claude", to: "   ")
         XCTAssertNil(store.records[0].customLabel, "a blank rename clears back to the derived name")
-        XCTAssertEqual(store.records[0].resolvedDisplayName, "Claude", "the bare card derives the stock family name")
+        XCTAssertEqual(
+            store.records[0].resolvedDisplayName,
+            "Claude — a@example.com",
+            "the default card keeps its account identity visible"
+        )
 
         store.rename(cardID: "missing", to: "X")
         XCTAssertEqual(store.records.count, 1, "renaming an unknown card is a no-op")

@@ -42,6 +42,8 @@ actor CodexLogUsageScanner {
     private let environment: EnvironmentReading
     private let homeDirectory: @Sendable () -> URL
     private let scanner: IncrementalJSONLScanner<Event>
+    private let rootsOverride: [URL]?
+    private let additionalRoots: [URL]
 
     /// One turn's token usage, normalized from a `token_count` line (deltas already applied).
     /// `isFast` records whether the session was on the fast/priority service tier when the turn
@@ -71,11 +73,15 @@ actor CodexLogUsageScanner {
     init(
         environment: EnvironmentReading = ProcessEnvironmentReader(),
         homeDirectory: @escaping @Sendable () -> URL = { FileManager.default.homeDirectoryForCurrentUser },
-        incrementalScanner: IncrementalJSONLScanner<Event>? = nil
+        incrementalScanner: IncrementalJSONLScanner<Event>? = nil,
+        rootsOverride: [URL]? = nil,
+        additionalRoots: [URL] = []
     ) {
         self.environment = environment
         self.homeDirectory = homeDirectory
         self.scanner = incrementalScanner ?? Self.sharedScanner
+        self.rootsOverride = rootsOverride
+        self.additionalRoots = additionalRoots
     }
 
     /// Scan the last `daysBack` days of Codex rollouts. Returns `nil` when no Codex home or no
@@ -107,14 +113,23 @@ actor CodexLogUsageScanner {
 
     /// `CODEX_HOME` entries (comma-separated) when set, else `~/.codex` — same as ccusage.
     private func codexHomes() -> [URL] {
-        if let raw = environment.value(for: "CODEX_HOME")?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !raw.isEmpty {
-            return raw.split(separator: ",")
+        let base: [URL]
+        if let rootsOverride {
+            base = rootsOverride
+        } else if let raw = environment.value(for: "CODEX_HOME")?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !raw.isEmpty {
+            base = raw.split(separator: ",")
                 .map { $0.trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty }
                 .map { URL(fileURLWithPath: expandHome($0)) }
+        } else {
+            base = [homeDirectory().appendingPathComponent(".codex")]
         }
-        return [homeDirectory().appendingPathComponent(".codex")]
+
+        var seen = Set<String>()
+        return (base + additionalRoots).filter {
+            seen.insert($0.resolvingSymlinksInPath().standardizedFileURL.path).inserted
+        }
     }
 
     /// Every rollout `*.jsonl` under each home's `sessions/` and `archived_sessions/` (a home with

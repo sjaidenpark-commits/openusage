@@ -19,6 +19,29 @@ When Codex reports your plan name, OpenUsage shows it beside the provider name.
 
 Sign in once with the Codex CLI (`codex`); OpenUsage reads the same auth files (`$CODEX_HOME` respected) with a keychain fallback. Tokens refresh automatically and rotate back into the auth file.
 
+## Multiple accounts
+
+OpenUsage finds file-backed Codex logins kept in separate `CODEX_HOME` directories. Each distinct
+ChatGPT account gets its own card, limits, plan, reset time, and spend tiles. A second home signed
+into the same account folds its logs into the existing card instead of showing a duplicate.
+
+Keep extra homes as dot-directories under your home directory (for example `~/.codex-work`) or as
+directories under `~/.config`. Set this in each home's `config.toml` before signing in so Codex writes
+an account-readable `auth.json` there:
+
+```toml
+cli_auth_credentials_store = "file"
+```
+
+Then sign each home in separately, for example `CODEX_HOME=~/.codex-work codex login`. Extra cards
+use ids such as `codex@ab12cd34`; requesting `openusage codex` returns every Codex card, while
+`openusage codex@ab12cd34` returns one.
+
+For reliable multi-account discovery, keep the default and extra homes file-backed. Keychain-only
+homes are intentionally skipped for now: discovery cannot identify their account without reading a
+secret during app launch. File-backed homes keep account attribution strict and prevent one card from
+silently showing another account's limits.
+
 ## The spend tiles
 
 Today / Yesterday / Last 30 Days are computed **locally**: OpenUsage reads the Codex CLI's session rollouts under `~/.codex/sessions/` and `archived_sessions/` (or `$CODEX_HOME`) itself — no external tools needed. Symlinks are followed, so a Codex home linked into a synced location (say, a Dropbox folder) is read all the same. Codex usage from the [pi](https://github.com/earendil-works/pi) coding agent counts too: OpenUsage reads pi's session logs under `~/.pi/agent/sessions/` (or `$PI_CODING_AGENT_SESSION_DIR`) and folds any Codex usage there into the same tiles and trend. pi records its own per-message cost, so those dollars come straight from pi rather than being re-estimated. Days are grouped in your Mac's local time zone, so they line up with your own calendar. Each period is one tile showing cost and tokens together (`$4.08 · 1.2M tokens`); a day with no usage reads **No data** rather than a misleading `$0.00 · 0 tokens` — the same as every other spend-tracking provider. The live Session and Weekly meters are unaffected. The dollars are estimated from token counts at API rates (that's the ⓘ) using the shared [model pricing](../pricing.md); sessions that ran on the fast/priority service tier — as recorded in each session's own log — use the fast rates for exactly those turns. Older logs without tier metadata, and everything else, price at standard rates; the current `config.toml` setting is not consulted, so flipping the tier never reprices past days. The token counts themselves are measured. Subagent and forked sessions copy their parent session's token history into their own log; OpenUsage recognizes those copies and counts each token once, no matter how many subagents a session spawns. No log data leaves your Mac.

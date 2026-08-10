@@ -120,22 +120,12 @@ struct DefaultAccountObserver: Sendable {
         let homes: [String]
         if let raw = environment.value(for: "CODEX_HOME")?
             .trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty {
+            guard !raw.contains(",") else {
+                return .unresolved(reason: "CODEX_HOME is a comma-separated list")
+            }
             homes = [raw]
         } else {
             homes = ["~/.config/codex", "~/.codex"]
-        }
-
-        // `CodexProvider.refresh` falls back to the keychain credential when file auth fails, so
-        // while a keychain item exists the file's identity is not provably the account that will
-        // produce the next snapshot. We never read the keychain secret here (launch path, prompt
-        // risk) — an attributes-only existence probe downgrades the whole family to unresolved,
-        // which just means "behave exactly as before account awareness". A later phase binds
-        // keyring-mode identities properly. Only a definite "no item" clears the family for file
-        // identity: a failed probe (`nil` — locked keychain, denied) is treated the same as
-        // "item present", because resolving from the file while the fallback is possible is the
-        // exact wrong-account stamp this rule exists to prevent.
-        if keychain.genericPasswordExists(service: CodexAuthStore.keychainService) != false {
-            return .unresolved(reason: "keychain credential present or unverifiable — identity unresolved this launch")
         }
 
         var sawFootprint = false
@@ -163,6 +153,12 @@ struct DefaultAccountObserver: Sendable {
             if let claimID = Self.chatGPTAccountID(inIDTokenPayload: payload) {
                 return .resolved(identityKey: claimID.lowercased(), label: email, anchor: anchor)
             }
+        }
+        // A resolved file-backed home is pinned by `ProviderCatalog`, so a stale keychain item can
+        // never become that card's fallback. Without a resolved file, keyring mode still cannot name
+        // its account without reading a secret during launch and remains unresolved.
+        if keychain.genericPasswordExists(service: CodexAuthStore.keychainService) != false {
+            return .unresolved(reason: "keychain credential present or unverifiable — identity unresolved this launch")
         }
         return sawFootprint
             ? .unresolved(reason: "credentials present but no account identity")

@@ -73,7 +73,8 @@ struct WidgetGroupedListView: View {
             warning: dataStore.headerNotice(for: group.provider.id),
             refreshing: dataStore.refreshingProviderIDs.contains(group.provider.id),
             staleness: dataStore.stalenessHint(for: group.provider.id),
-            onCopyScreenshot: { shareCard(group) }
+            onCopyScreenshot: { shareCard(group) },
+            showsReorderGrip: hasSiblingAccount(group.provider.id)
         )
         // Keep the provider mark and hover-revealed copy control aligned with the card's content edges.
         .padding(.horizontal, 8)
@@ -107,6 +108,14 @@ struct WidgetGroupedListView: View {
             Divider()
             Button("Share Screenshot") { _ = shareCard(group) }
         }
+    }
+
+    private func hasSiblingAccount(_ providerID: String) -> Bool {
+        let family = ProviderAccountID.family(of: providerID)
+        guard ProviderAccountID.families.contains(family) else { return false }
+        return layout.displayGroups.lazy.filter {
+            ProviderAccountID.family(of: $0.provider.id) == family
+        }.prefix(2).count == 2
     }
 
     /// Renders the provider's branded share card and copies the PNG to the clipboard. The appearance is
@@ -265,6 +274,7 @@ struct WidgetGroupedListView: View {
             data: data,
             onToggleResetDisplay: { dataStore.resetDisplayMode.toggle() },
             onToggleMeterStyle: { dataStore.meterStyle.toggle() },
+            allowsResetClaim: providerID == "codex",
             condensedTop: condensedTop
         )
             .contentShape(Rectangle())

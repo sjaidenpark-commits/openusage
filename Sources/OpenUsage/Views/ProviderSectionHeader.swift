@@ -24,6 +24,8 @@ struct ProviderSectionHeader: View {
     /// Dashboard-only screenshot action. The reorder preview omits it, while Customize uses its own
     /// row type and is unaffected by this header.
     var onCopyScreenshot: (() -> Bool)?
+    /// Multi-account dashboard cards expose the otherwise hidden header drag affordance.
+    var showsReorderGrip = false
 
     /// Header type and icon track the density setting like the rows do, so Compact shrinks the
     /// whole section anatomy — not just the rows under it.
@@ -41,7 +43,8 @@ struct ProviderSectionHeader: View {
         warning: String? = nil,
         refreshing: Bool = false,
         staleness: StalenessHint? = nil,
-        onCopyScreenshot: (() -> Bool)? = nil
+        onCopyScreenshot: (() -> Bool)? = nil,
+        showsReorderGrip: Bool = false
     ) {
         self.provider = provider
         self.plan = plan
@@ -49,12 +52,13 @@ struct ProviderSectionHeader: View {
         self.refreshing = refreshing
         self.staleness = staleness
         self.onCopyScreenshot = onCopyScreenshot
+        self.showsReorderGrip = showsReorderGrip
     }
 
     var body: some View {
         HStack(spacing: 5) {
-            // The provider mark replaces the dashboard's visual drag grip. Reordering still belongs
-            // to the whole header at the caller, so the logo itself stays presentational.
+            // Reordering belongs to the whole header at the caller; multi-account families also get
+            // an explicit trailing grip so the gesture is discoverable.
             ProviderIcon(source: provider.icon, inset: 0.04)
                 .frame(width: density.headerIconSize, height: density.headerIconSize)
                 .partyPulse(partyMode)
@@ -97,6 +101,11 @@ struct ProviderSectionHeader: View {
                     .accessibilityLabel(warning)
             }
             Spacer(minLength: 8)
+            if showsReorderGrip {
+                ReorderGrip()
+                    .hoverTooltip("Drag to reorder accounts")
+                    .accessibilityLabel("Drag to reorder accounts")
+            }
             if let onCopyScreenshot {
                 CopyFeedbackButton(
                     accessibilityLabel: "Copy \(container.displayName(for: provider)) Screenshot",

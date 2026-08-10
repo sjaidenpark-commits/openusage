@@ -95,6 +95,28 @@ final class MenuBarPinTests: XCTestCase {
         XCTAssertEqual(store.pinnedGroups.map(\.provider.id), ["a", "b"])
     }
 
+    func testTopAccountCardOwnsFamilyPinsAfterReorder() {
+        let store = LayoutStore(
+            registry: makeAccountRegistry(),
+            defaults: makeDefaults("topAccount"),
+            storageKey: "layout",
+            defaultMetricIDs: ["claude.session", "claude.weekly"],
+            defaultPinnedMetricIDs: [],
+            defaultExpandedMetricIDs: []
+        )
+        store.setPinned(true, for: "claude.session")
+        store.setPinned(true, for: "claude.weekly")
+
+        XCTAssertEqual(store.pinnedGroups.map(\.provider.id), ["claude"])
+        XCTAssertTrue(store.reorderProvider(dragged: "claude@work", target: "claude"))
+        XCTAssertEqual(store.pinnedGroups.map(\.provider.id), ["claude@work"])
+        XCTAssertEqual(
+            store.pinnedGroups.flatMap { $0.metrics.map(\.id) },
+            ["claude@work.session", "claude@work.weekly"]
+        )
+        XCTAssertEqual(store.pinnedMetricIDs, ["claude.session", "claude.weekly"])
+    }
+
     func testDisabledProviderPinsExcludedFromGroupsButKept() {
         let store = LayoutStore(
             registry: makeRegistry(),
@@ -147,6 +169,19 @@ final class MenuBarPinTests: XCTestCase {
         }
         let descriptors = providers.flatMap { provider in
             (1...3).map { n in metric(provider, id: "\(provider.id).m\(n)", label: "M\(n)") }
+        }
+        return WidgetRegistry(providers: providers, descriptors: descriptors)
+    }
+
+    private func makeAccountRegistry() -> WidgetRegistry {
+        let providers = [
+            Provider(id: "claude", displayName: "Claude", icon: .providerMark("claude")),
+            Provider(id: "claude@work", displayName: "Claude — Work", icon: .providerMark("claude")),
+        ]
+        let descriptors = providers.flatMap { provider in
+            ["session", "weekly"].map { suffix in
+                metric(provider, id: "\(provider.id).\(suffix)", label: suffix.capitalized)
+            }
         }
         return WidgetRegistry(providers: providers, descriptors: descriptors)
     }

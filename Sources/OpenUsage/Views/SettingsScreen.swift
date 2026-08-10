@@ -16,6 +16,8 @@ struct SettingsScreen: View {
 
     @State private var launchAtLogin = LaunchAtLoginSetting()
     @State private var commandLineTool = CommandLineToolInstaller()
+    @State private var managedAccounts = ManagedAccountSlots()
+    @State private var pendingAccountDeletion: ManagedAccountSlot?
     @AppStorage(TotalSpendSetting.key) private var showTotalSpend = true
     @AppStorage(AppearanceSetting.key) private var appearance = AppearanceSetting.system
     @AppStorage(TimeFormatSetting.key) private var timeFormat = TimeFormatSetting.auto
@@ -141,6 +143,7 @@ struct SettingsScreen: View {
                         .hoverTooltip("Show how you're pacing on every metric, not just ones near their limit")
                 }
             }
+            accountsSection
             notificationsSection
             section("Privacy") {
                 row("Hide From Screen Share") {
@@ -208,10 +211,83 @@ struct SettingsScreen: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .task { await refreshNotificationsAuth() }
+        .alert(item: $pendingAccountDeletion) { slot in
+            Alert(
+                title: Text("Remove \(slot.title)?"),
+                message: Text("Its isolated login folder moves to Trash. Your default \(slot.provider.displayName) account is untouched."),
+                primaryButton: .destructive(Text("Remove")) { managedAccounts.remove(slot) },
+                secondaryButton: .cancel()
+            )
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             commandLineTool.refreshStatus()
+            managedAccounts.refresh()
             Task { await refreshNotificationsAuth() }
         }
+    }
+
+    // MARK: - Accounts
+
+    private var accountsSection: some View {
+        section("Accounts") {
+            accountProviderRow(.claude)
+            Divider()
+            accountProviderRow(.codex)
+            ForEach(managedAccounts.slots) { slot in
+                Divider()
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(slot.provider.displayName) — \(slot.title)")
+                            .lineLimit(1)
+                        Text(slot.isReady ? "Signed in" : "Login required")
+                            .font(.caption)
+                            .foregroundStyle(slot.isReady ? AnyShapeStyle(Color.secondary) : Theme.notice)
+                    }
+                    Spacer(minLength: 4)
+                    Button(slot.isReady ? "Re-login" : "Sign In") {
+                        managedAccounts.signIn(slot)
+                    }
+                    .controlSize(.small)
+                    Button {
+                        pendingAccountDeletion = slot
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Remove \(slot.title)")
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, density.controlRowPadding)
+            }
+            Text("Default logins stay untouched. Drag account headers on the Dashboard to reorder them.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if let notice = managedAccounts.notice {
+                inlineNotice(notice)
+            }
+        }
+    }
+
+    private func accountProviderRow(_ provider: ManagedAccountProvider) -> some View {
+        let record = container.accounts.defaultBadgeHolder(family: provider.rawValue)
+        return HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(provider.displayName)
+                Text(record?.label?.nilIfEmpty ?? "Default account not identified")
+                    .font(.caption)
+                    .foregroundStyle(record?.label?.nilIfEmpty == nil ? Theme.notice : AnyShapeStyle(Color.secondary))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            Button("Add Account…") { managedAccounts.add(provider) }
+                .controlSize(.small)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, density.controlRowPadding)
     }
 
     // MARK: - Notifications

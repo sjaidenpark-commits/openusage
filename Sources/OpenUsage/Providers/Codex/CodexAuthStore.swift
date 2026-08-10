@@ -1,5 +1,12 @@
 import Foundation
 
+/// The default card follows the normal Codex credential chain. Extra account cards are pinned to
+/// one file-backed home so credentials from another account can never leak across cards.
+enum CodexCredentialScope: Hashable, Sendable {
+    case standard
+    case home(path: String)
+}
+
 struct CodexTokens: Codable, Hashable, Sendable {
     var accessToken: String?
     var refreshToken: String?
@@ -93,16 +100,19 @@ struct CodexAuthStore: Sendable {
     var files: TextFileAccessing
     var keychain: KeychainAccessing
     var now: @Sendable () -> Date
+    let scope: CodexCredentialScope
 
     init(
         environment: EnvironmentReading = ProcessEnvironmentReader(),
         files: TextFileAccessing = LocalTextFileAccessor(),
         keychain: KeychainAccessing = SecurityKeychainAccessor(),
+        scope: CodexCredentialScope = .standard,
         now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.environment = environment
         self.files = files
         self.keychain = keychain
+        self.scope = scope
         self.now = now
     }
 
@@ -126,6 +136,7 @@ struct CodexAuthStore: Sendable {
     }
 
     func loadKeychainAuth() -> CodexAuthState? {
+        guard scope == .standard else { return nil }
         guard let value = try? keychain.readGenericPassword(service: Self.keychainService),
               let auth = Self.parseAuth(value),
               Self.hasTokenLikeAuth(auth)
@@ -147,6 +158,7 @@ struct CodexAuthStore: Sendable {
         case .file(let path):
             try files.writeText(path, text)
         case .keychain:
+            guard scope == .standard else { throw CodexAuthError.invalidAuthPayload }
             try keychain.writeGenericPassword(service: Self.keychainService, value: text)
         }
     }
@@ -181,6 +193,9 @@ struct CodexAuthStore: Sendable {
     }
 
     func authPaths() -> [String] {
+        if case .home(let path) = scope {
+            return [joinPath(path, Self.authFile)]
+        }
         if let codexHome = codexHome() {
             return [joinPath(codexHome, Self.authFile)]
         }
@@ -217,4 +232,3 @@ private extension CodexAuthState.Source {
         return false
     }
 }
-

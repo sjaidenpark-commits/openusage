@@ -12,7 +12,10 @@ enum ProviderCatalog {
     static func make(
         defaults: UserDefaults = .standard,
         claudeCards: [ClaudeAccountCard] = [],
-        defaultClaudeExtraLogRoots: [URL] = []
+        defaultClaudeExtraLogRoots: [URL] = [],
+        codexCards: [CodexAccountCard] = [],
+        defaultCodexExtraLogRoots: [URL] = [],
+        defaultCodexHomePath: String? = nil
     ) -> [ProviderRuntime] {
         // Default provider order (see AGENTS.md "## Providers"): the three established providers first,
         // then every other provider alphabetically by display name. Account cards slot in right after
@@ -32,8 +35,18 @@ enum ProviderCatalog {
         for card in claudeCards {
             runtimes.append(claudeAccountRuntime(card: card))
         }
+        let defaultCodexRoots = defaultCodexHomePath.map { [URL(fileURLWithPath: $0)] + defaultCodexExtraLogRoots }
+        runtimes.append(CodexProvider(
+            authStore: defaultCodexHomePath.map { CodexAuthStore(scope: .home(path: $0)) } ?? CodexAuthStore(),
+            logUsageScanner: CodexLogUsageScanner(
+                rootsOverride: defaultCodexRoots,
+                additionalRoots: defaultCodexHomePath == nil ? defaultCodexExtraLogRoots : []
+            )
+        ))
+        for card in codexCards {
+            runtimes.append(codexAccountRuntime(card: card))
+        }
         runtimes += [
-            CodexProvider(),
             CursorProvider(),
             AntigravityProvider(),
             CopilotProvider(defaults: defaults),
@@ -59,6 +72,16 @@ enum ProviderCatalog {
                 cacheIdentityOverride: "claude-account:\(card.id)",
                 rootsOverride: [URL(fileURLWithPath: card.configDirPath)] + card.extraLogRoots
             )
+        )
+    }
+
+    /// An extra Codex account card, pinned to one file-backed home for both credentials and logs.
+    private static func codexAccountRuntime(card: CodexAccountCard) -> CodexProvider {
+        let roots = [URL(fileURLWithPath: card.homePath)] + card.extraLogRoots
+        return CodexProvider(
+            provider: CodexProvider.makeProvider(id: card.id, displayName: card.displayName),
+            authStore: CodexAuthStore(scope: .home(path: card.homePath)),
+            logUsageScanner: CodexLogUsageScanner(rootsOverride: roots)
         )
     }
 }
